@@ -255,6 +255,7 @@ async function cloudPull(){
   CACHE.company.companyName = company.name;
   CACHE.company.adminName = company.admin_name || CACHE.company.adminName || '';
   CACHE.company.adminEmail = company.admin_email || CACHE.company.adminEmail || user.email || '';
+  normalizeCustomerBillingStarts();
   localPersist();
   CLOUD_LAST_REMOTE = row?.updated_at ? Date.parse(row.updated_at) : Date.now();
   startRealtime();
@@ -459,11 +460,34 @@ async function nextReceiptNo(){
 }
 
 /* ============================= DERIVED / LEDGER LOGIC ============================= */
-function monthsElapsed(customer, asOfYear, asOfMonth){
+function customerStartParts(customer){
+  const raw = String(customer.billingStart || '').trim();
+  if(/^\\d{4}-\\d{2}$/.test(raw)){
+    const y = Number(raw.slice(0,4)), m = Number(raw.slice(5,7));
+    if(m>=1 && m<=12) return {y,m};
+  }
   const created = new Date(customer.createdAt);
-  if(isNaN(created.getTime())) return 0;
-  const cy = created.getFullYear(), cm = created.getMonth()+1;
-  const diff = (asOfYear - cy)*12 + (asOfMonth - cm) + 1;
+  if(!isNaN(created.getTime())) return {y:created.getFullYear(), m:created.getMonth()+1};
+  return null;
+}
+function billingStartValue(customer){
+  const p = customerStartParts(customer);
+  return p ? `${p.y}-${pad(p.m,2)}` : '';
+}
+function normalizeCustomerBillingStarts(){
+  let changed = false;
+  (CACHE.customers||[]).forEach(c=>{
+    if(!c.billingStart){
+      const p = customerStartParts(c);
+      if(p){ c.billingStart = `${p.y}-${pad(p.m,2)}`; changed = true; }
+    }
+  });
+  if(changed) localPersist();
+}
+function monthsElapsed(customer, asOfYear, asOfMonth){
+  const start = customerStartParts(customer);
+  if(!start) return 0;
+  const diff = (asOfYear - start.y)*12 + (asOfMonth - start.m) + 1;
   return Math.max(diff, 0);
 }
 function totalPaidByCustomer(customerId, upToYear, upToMonth){
@@ -509,6 +533,7 @@ async function init(){
       try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
     }
   }
+  normalizeCustomerBillingStarts();
   render();
 }
 init();
@@ -767,7 +792,7 @@ function viewAdminDashboard(){
   const totalDue = active.reduce((s,c)=>s+Math.max(ledgerDue(c,y,m),0),0);
   const paidCustomerIds = new Set(monthPays.map(p=>p.customerId));
   const paidCount = active.filter(c=>paidCustomerIds.has(c.id)).length;
-  const dueCount = active.length - paidCount;
+  const dueCount = active.filter(c=>Math.max(ledgerDue(c,y,m),0)>0).length;
   const months = [];
   for(let i=8;i>=0;i--){ const d = new Date(y, m-1-i, 1); months.push({y:d.getFullYear(), m:d.getMonth()+1, label:MONTHS[d.getMonth()].slice(0,3)}); }
   const maxVal = Math.max(1, ...months.map(mo=>paymentsInMonth(mo.y,mo.m).reduce((s,p)=>s+Number(p.amount||0),0)));
@@ -818,7 +843,7 @@ function viewCustomers(){
     const due = ledgerDue(c,y,m);
     return `<tr>
       <td class="mono">${esc(c.id)}</td><td>${esc(c.name)}</td><td class="mono">${esc(c.mobile||'—')}</td>
-      <td>${esc(packageName(c.packageId))}</td><td class="num">${fmtBDT(c.monthlyBill)}</td>
+      <td>${esc(packageName(c.packageId))}</td><td>${esc(billingStartValue(c) || '—')}</td><td class="num">${fmtBDT(c.monthlyBill)}</td>
       <td class="num">${due>0?`<span class="due-num">${fmtBDT(due)}</span>`:`<span class="credit-num">${due<0?'−'+fmtBDT(Math.abs(due)):fmtBDT(0)}</span>`}</td>
       <td><span class="badge ${c.status==='Active'?'active':'inactive'}">${c.status}</span></td>
       <td style="text-align:right;white-space:nowrap;"><button class="btn sm" data-edit-customer="${esc(c.id)}">Edit</button> <button class="btn sm" data-toggle-customer="${esc(c.id)}">${c.status==='Active'?'Disable':'Enable'}</button></td>
@@ -829,7 +854,7 @@ function viewCustomers(){
     <button class="btn primary" data-action="add-customer">+ Add customer</button>
   </div>
   <div class="toolbar"><input class="input" style="max-width:320px;" id="customerSearch" placeholder="Search by ID, name or mobile" value="${esc(SEARCH_Q)}"></div>
-  ${list.length ? `<div class="tablewrap"><table><thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Package</th><th>Monthly bill</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+  ${list.length ? `<div class="tablewrap"><table><thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Package</th><th>Start month</th><th>Monthly bill</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
   : `<div class="card"><div class="empty"><div class="big">👤</div>${q?'No customers match your search.':'No customers yet. Add your first customer to get started.'}</div></div>`}
   `;
 }
@@ -1042,6 +1067,7 @@ function viewCollect(){
       <div><div class="field"><label>Customer</label><div style="font-weight:600;">${esc(c.name)}</div></div></div>
       <div><div class="field"><label>Mobile</label><div class="mono">${esc(c.mobile||'—')}</div></div></div>
       <div><div class="field"><label>Package</label><div>${esc(packageName(c.packageId))}</div></div></div>
+      <div><div class="field"><label>Billing start</label><div>${esc(billingStartValue(c) || '—')}</div></div></div>
       <div><div class="field"><label>Monthly bill</label><div class="num">${fmtBDT(c.monthlyBill)}</div></div></div>
       <div><div class="field"><label>Previous due</label><div class="num due-num">${fmtBDT(Math.max(previousDue,0))}</div></div></div>
       <div><div class="field"><label>Total payable</label><div class="num" style="font-weight:700;">${fmtBDT(totalPayable)}</div></div></div>
@@ -1054,7 +1080,7 @@ function viewCollect(){
         <div class="pillrow" id="methodPills">${['Cash','bKash','Nagad','Bank'].map((mm,i)=>`<button type="button" class="pill ${i===0?'active':''}" data-method="${mm}">${mm}</button>`).join('')}</div>
         <input type="hidden" name="method" value="Cash">
       </div>
-      <button class="btn primary block" type="submit" style="padding:13px;font-size:14.5px;">Collect payment</button>
+      <button class="btn primary block" type="submit" style="padding:13px;font-size:14.5px;" ${totalPayable<=0?'disabled':''}>${totalPayable>0?'Collect payment':'No outstanding due'}</button>
     </form>
   </div>
   `;
@@ -1092,6 +1118,11 @@ function modalCustomerForm(data){
       <div class="formrow">
         <div class="field"><label>Mobile number</label><input class="input" name="mobile" value="${data?esc(data.mobile||''):''}"></div>
         <div class="field"><label>Status</label><select class="input" name="status"><option ${!data||data.status==='Active'?'selected':''}>Active</option><option ${data&&data.status==='Inactive'?'selected':''}>Inactive</option></select></div>
+      </div>
+      <div class="field">
+        <label>Billing start month</label>
+        <input class="input" type="month" name="billingStart" required value="${esc(billingStartValue(data || {createdAt:new Date().toISOString()}))}">
+        <div class="hint">Monthly billing starts from this month.</div>
       </div>
       <div class="field"><label>Address</label><input class="input" name="address" value="${data?esc(data.address||''):''}"></div>
       <div class="field"><label>Package</label>
@@ -1276,11 +1307,26 @@ function attachViewHandlers(){
     if(!amount || amount<=0){ toast('Enter a valid amount','err'); return; }
     const btn = collectForm.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='Saving…';
     const c = COLLECT_CUSTOMER; const now = new Date(); const y = now.getFullYear(), m = now.getMonth()+1;
-    const previousDue = Math.max(ledgerDue(c,y,m),0);
+    if(!c){ toast('Select a customer first','err'); btn.disabled=false; btn.textContent='Collect payment'; return; }
+    const outstanding = Math.max(ledgerDue(c,y,m),0);
+    if(outstanding <= 0){
+      toast('This customer has no outstanding bill. Duplicate collection is blocked.','err');
+      btn.disabled=false; btn.textContent='Collect payment'; return;
+    }
+    if(amount > outstanding){
+      toast(`Maximum collectible amount is ${fmtBDT(outstanding)}`,'err');
+      btn.disabled=false; btn.textContent='Collect payment'; return;
+    }
+    const latestOutstanding = Math.max(ledgerDue(c,y,m),0);
+    if(latestOutstanding <= 0 || amount > latestOutstanding){
+      toast(latestOutstanding <= 0 ? 'This bill is already fully paid.' : `Maximum collectible amount is ${fmtBDT(latestOutstanding)}`,'err');
+      btn.disabled=false; btn.textContent='Collect payment'; return;
+    }
+    const previousDue = Math.max(latestOutstanding - Number(c.monthlyBill||0),0);
     const receiptNo = await nextReceiptNo();
     const payment = { receiptNo, customerId:c.id, customerName:c.name, amount, method, month:m, year:y, date: now.toISOString(), collectorId: SESSION.id, collectorName: SESSION.name, billAmount: Number(c.monthlyBill||0), previousDue };
     CACHE.payments.push(payment); persist();
-    LAST_RECEIPT = { ...payment, remainingDue: previousDue - amount };
+    LAST_RECEIPT = { ...payment, remainingDue: Math.max(latestOutstanding - amount,0) };
     COLLECT_CUSTOMER = null; SEARCH_Q='';
     MODAL = { type:'receipt', data: LAST_RECEIPT };
     toast('Payment collected','ok'); render();
@@ -1308,13 +1354,15 @@ function attachModalHandlers(){
     e.preventDefault();
     const fd = new FormData(cf);
     const pkg = CACHE.packages.find(p=>p.id===fd.get('packageId'));
+    const billingStart = String(fd.get('billingStart')||'').trim();
+    if(!/^\\d{4}-\\d{2}$/.test(billingStart)){ toast('Select a valid billing start month','err'); return; }
     if(MODAL.data){
       const c = CACHE.customers.find(x=>x.id===MODAL.data.id);
-      Object.assign(c, { name: fd.get('name'), mobile: fd.get('mobile')||'', address: fd.get('address')||'', status: fd.get('status'), packageId: fd.get('packageId'), monthlyBill: pkg?Number(pkg.price):Number(c.monthlyBill||0) });
+      Object.assign(c, { name: fd.get('name'), mobile: fd.get('mobile')||'', address: fd.get('address')||'', status: fd.get('status'), packageId: fd.get('packageId'), monthlyBill: pkg?Number(pkg.price):Number(c.monthlyBill||0), billingStart });
       persist(); toast('Customer updated','ok');
     } else {
       const id = await nextCustomerId();
-      CACHE.customers.push({ id, name: fd.get('name'), mobile: fd.get('mobile')||'', address: fd.get('address')||'', status: fd.get('status'), packageId: fd.get('packageId'), monthlyBill: pkg?Number(pkg.price):0, createdAt: new Date().toISOString() });
+      CACHE.customers.push({ id, name: fd.get('name'), mobile: fd.get('mobile')||'', address: fd.get('address')||'', status: fd.get('status'), packageId: fd.get('packageId'), monthlyBill: pkg?Number(pkg.price):0, billingStart, createdAt: new Date().toISOString() });
       persist(); toast('Customer added','ok');
     }
     MODAL=null; render();
