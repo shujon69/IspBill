@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ISP Bill Collection (Online)</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F7F3; --surface:#FFFFFF; --ink:#132A20; --ink-soft:#5C6E63;
+  --border:#DFE3DA; --brand:#0F5C36; --brand-dark:#0A4127; --brand-soft:#E4EEE7;
+  --gold:#A9791C; --gold-soft:#F6EEDB; --red:#A83232; --red-soft:#FAEAE9;
+  --radius:10px; --radius-lg:16px;
+  --font-sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SF Mono',monospace;
+  --sidebar-w:224px;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;}
+body.modal-open{overflow:hidden;} body{background:var(--bg); color:var(--ink); font-family:var(--font-sans); font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;}
+button{font-family:inherit;} input,select{font-family:inherit;font-size:14px;}
+::selection{background:var(--brand);color:#fff;}
+a{color:var(--brand);}
+.mono{font-family:var(--font-mono);}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+
+#app{min-height:100%;}
+.center-screen{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:32px 16px;}
+.appshell{display:flex; min-height:100vh;}
+.sidebar{width:var(--sidebar-w); flex:0 0 auto; background:var(--brand-dark); color:#EAF3EC; display:flex; flex-direction:column; padding:20px 14px;}
+.sidebar .brand{display:flex; align-items:center; gap:10px; padding:0 8px 20px 8px;}
+.sidebar .brand-mark{width:34px;height:34px;border-radius:9px;background:var(--gold);display:flex;align-items:center;justify-content:center;color:#2A2107;font-weight:700;font-family:var(--font-mono);flex:0 0 auto;}
+.sidebar .brand-name{font-weight:600; font-size:14.5px; line-height:1.25;}
+.sidebar .brand-role{font-size:11.5px; color:#A9C9B4; margin-top:1px;}
+.navlist{list-style:none;margin:6px 0 0 0;padding:0;flex:1;}
+.navlist li{margin-bottom:2px;}
+.navlink{display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:10px 12px; border-radius:9px; border:none; background:transparent; color:#CFE4D7; cursor:pointer; font-size:14px; font-weight:500;}
+.navlink:hover{background:rgba(255,255,255,0.06);}
+.navlink.active{background:var(--gold); color:#2A2107; font-weight:600;}
+.navlink .ic{width:18px;text-align:center;flex:0 0 auto;font-size:15px;}
+.sidebar-foot{border-top:1px solid rgba(255,255,255,0.12); padding-top:12px; margin-top:8px;}
+.sidebar-foot .who{font-size:12.5px; color:#A9C9B4; padding:0 8px 8px 8px;}
+.sidebar-foot .who b{color:#fff; display:block; font-size:13.5px;}
+.main{flex:1; min-width:0; padding:26px 30px 60px 30px;}
+.pagehead{display:flex; align-items:baseline; justify-content:space-between; gap:14px; margin-bottom:20px; flex-wrap:wrap;}
+.pagehead h1{font-size:21px; margin:0; font-weight:600; letter-spacing:-0.01em;}
+.pagehead .sub{color:var(--ink-soft); font-size:13.5px; margin-top:3px;}
+.topbar{display:none;}
+.bottomnav{display:none;}
+.offlinepill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--brand);background:var(--brand-soft);padding:4px 10px;border-radius:999px;}
+
+@media (max-width: 860px){
+  .sidebar{display:none;}
+  .appshell{display:block;}
+  .topbar{display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--brand-dark); color:#fff; position:sticky; top:0; z-index:20;}
+  .topbar .brand{display:flex;align-items:center;gap:9px;}
+  .topbar .brand-mark{width:28px;height:28px;border-radius:7px;background:var(--gold);color:#2A2107;font-weight:700;font-family:var(--font-mono);display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .topbar .brand-name{font-weight:600;font-size:14px;}
+  .topbar button.logout{background:rgba(255,255,255,0.12); color:#fff; border:none; padding:7px 11px; border-radius:8px; font-size:12.5px;}
+  .main{padding:18px 14px 90px 14px;}
+  .bottomnav{display:flex; position:fixed; left:0; right:0; bottom:0; z-index:20; background:var(--surface); border-top:1px solid var(--border);}
+  .bottomnav .navlink{flex:1; flex-direction:column; gap:2px; border-radius:0; padding:9px 4px; color:var(--ink-soft); font-size:10.5px; align-items:center;}
+  .bottomnav .navlink .ic{font-size:17px;}
+  .bottomnav .navlink.active{background:transparent; color:var(--brand); font-weight:600;}
+}
+
+.card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px;}
+.grid{display:grid; gap:14px;}
+.grid-stats{grid-template-columns:repeat(auto-fit,minmax(178px,1fr));}
+.stat{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px 18px;}
+.stat .label{font-size:12px; color:var(--ink-soft); font-weight:500;}
+.stat .value{font-family:var(--font-mono); font-size:22px; font-weight:600; margin-top:6px; letter-spacing:-0.01em;}
+.stat.brand .value{color:var(--brand);} .stat.gold .value{color:var(--gold);} .stat.red .value{color:var(--red);}
+
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:9px; border:1px solid var(--border); background:var(--surface); color:var(--ink); padding:9px 14px; font-size:13.5px; font-weight:600; cursor:pointer; white-space:nowrap;}
+.btn:hover{border-color:var(--ink-soft);}
+.btn.primary{background:var(--brand); border-color:var(--brand); color:#fff;}
+.btn.primary:hover{background:var(--brand-dark);}
+.btn.gold{background:var(--gold); border-color:var(--gold); color:#2A2107;}
+.btn.danger{color:var(--red); border-color:var(--red-soft);}
+.btn.danger:hover{background:var(--red-soft);}
+.btn.ghost{border-color:transparent; background:transparent;}
+.btn.block{width:100%;}
+.btn.sm{padding:6px 10px; font-size:12.5px;}
+.btn:disabled{opacity:0.5; cursor:not-allowed;}
+
+.toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px;}
+.input, select.input{border:1px solid var(--border); border-radius:8px; padding:9px 11px; background:var(--surface); color:var(--ink); font-size:14px; width:100%;}
+.input:focus, select.input:focus{outline:2px solid var(--brand); outline-offset:1px; border-color:var(--brand);}
+.field{margin-bottom:13px;}
+.field label{display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:5px;}
+.field .hint{font-size:11.5px; color:var(--ink-soft); margin-top:4px;}
+.formrow{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+@media (max-width:520px){.formrow{grid-template-columns:1fr;}}
+
+table{width:100%; border-collapse:collapse; font-size:13.5px;}
+thead th{text-align:left; font-size:11.5px; color:var(--ink-soft); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap;}
+tbody td{padding:10px 10px; border-bottom:1px solid var(--border); vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:var(--brand-soft);}
+.tablewrap{overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface);}
+.tablewrap table{min-width:560px;}
+
+.badge{display:inline-block; padding:3px 9px; border-radius:999px; font-size:11.5px; font-weight:600;}
+.badge.active{background:var(--brand-soft); color:var(--brand);}
+.badge.inactive{background:var(--red-soft); color:var(--red);}
+.badge.method{background:var(--gold-soft); color:var(--gold);}
+
+.empty{padding:40px 20px; text-align:center; color:var(--ink-soft);}
+.empty .big{font-size:28px; margin-bottom:8px;}
+.section-title{font-size:14.5px; font-weight:600; margin:26px 0 12px 0;}
+.section-title:first-child{margin-top:0;}
+
+.modal-backdrop{position:fixed; inset:0; background:rgba(10,20,14,0.45); z-index:50; display:flex; align-items:flex-end; justify-content:center;}
+@media (min-width:640px){ .modal-backdrop{align-items:center; padding:20px;} }
+.modal{background:var(--surface); width:100%; max-width:480px; max-height:92vh; overflow-y:auto; border-radius:16px 16px 0 0; padding:20px; border:1px solid var(--border);}
+@media (min-width:640px){ .modal{border-radius:16px;} }
+.modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+.modal-head h2{font-size:16.5px; margin:0; font-weight:600;}
+.modal-close{background:none; border:none; font-size:20px; color:var(--ink-soft); cursor:pointer; line-height:1; padding:4px;}
+.modal-actions{display:flex; gap:10px; margin-top:16px;}
+
+#toast-host{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:80; display:flex; flex-direction:column; gap:8px; align-items:center;}
+.toast{background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:9px; font-size:13.5px; font-weight:500; box-shadow:0 6px 18px rgba(0,0,0,0.18);}
+.toast.err{background:var(--red);} .toast.ok{background:var(--brand);}
+
+.receipt{background:#fff; color:#1a1a1a; border:1px dashed #999; border-radius:6px; padding:20px; font-family:var(--font-mono); font-size:12.5px; max-width:340px; margin:0 auto;}
+.receipt .rhead{text-align:center; margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #999;}
+.receipt .rhead .co{font-weight:700; font-size:14px;}
+.receipt .rhead .small{font-size:11px; color:#555;}
+.receipt .rtitle{text-align:center; font-weight:700; letter-spacing:0.06em; margin:8px 0; font-size:12px;}
+.receipt .rrow{display:flex; justify-content:space-between; padding:3px 0;}
+.receipt .rrow .k{color:#555;}
+.receipt .rrow.total{border-top:1px dashed #999; margin-top:6px; padding-top:8px; font-weight:700; font-size:13.5px;}
+.receipt .rfoot{text-align:center; margin-top:12px; padding-top:10px; border-top:1px dashed #999; font-size:11px; color:#555;}
+
+.barchart{display:flex; align-items:flex-end; gap:8px; height:120px; padding-top:6px;}
+.barchart .bar-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+.barchart .bar{width:100%; max-width:26px; background:var(--brand); border-radius:4px 4px 0 0; min-height:2px;}
+.barchart .bar.now{background:var(--gold);}
+.barchart .mlabel{font-size:10px; color:var(--ink-soft); margin-top:5px;}
+
+.loginwrap{width:100%; max-width:380px;}
+.loginwrap .brandhead{display:flex; align-items:center; gap:12px; margin-bottom:22px; justify-content:center;}
+.loginwrap .brandhead .mark{width:44px;height:44px;border-radius:11px;background:var(--brand); color:#fff; display:flex;align-items:center;justify-content:center; font-weight:700; font-family:var(--font-mono);}
+.loginwrap .brandhead .t{font-size:17px; font-weight:600;}
+.tabs{display:flex; gap:6px; background:var(--brand-soft); padding:4px; border-radius:10px; margin-bottom:18px;}
+.tabs button{flex:1; padding:9px; border-radius:8px; border:none; background:transparent; font-weight:600; font-size:13.5px; color:var(--ink-soft); cursor:pointer;}
+.tabs button.active{background:var(--surface); color:var(--brand); box-shadow:0 1px 2px rgba(0,0,0,0.08);}
+
+.pillrow{display:flex; gap:8px; flex-wrap:wrap;}
+.pill{padding:7px 12px; border-radius:999px; border:1px solid var(--border); background:var(--surface); font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink-soft);}
+.pill.active{background:var(--brand); border-color:var(--brand); color:#fff;}
+.due-num{color:var(--red); font-weight:600;}
+.credit-num{color:var(--brand); font-weight:600;}
+
+@media print{
+  body *{visibility:hidden;}
+  #print-area, #print-area *{visibility:visible;}
+  #print-area{position:absolute; top:0; left:0; width:100%; display:block !important;}
+}
+</style>
+</head>
+<body>
+<div id="toast-host"></div>
+<div id="app"></div>
+<div id="modal-root"></div>
+
+<script>
+/* ============================= ONLINE CLOUD STORAGE ============================= */
+/*
+  Online mode uses Supabase Auth + Postgres + Realtime.
+  Put your Supabase project URL and anon/public key in config.js (see README).
+  The browser never receives a service-role key.
+*/
+const STORE_KEY = 'isp_billing_store_v2';
+const SESSION_KEY = 'isp_billing_session_v2';
+const CLOUD_CONFIG = window.ISP_CLOUD_CONFIG || { url:'', anonKey:'' };
+let STORAGE_OK = true;
+let CLOUD_ENABLED = false;
+let SB = null;
+let CLOUD_COMPANY_ID = null;
+let CLOUD_SUB = null;
+let CLOUD_SYNC_CHAIN = Promise.resolve();
+let CLOUD_LAST_REMOTE = 0;
+
+function emptyStore(){
+  return { company:null, packages:[], customers:[], collectors:[], payments:[], counters:{customerSeq:0, receiptSeq:0} };
+}
+function loadStore(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return emptyStore();
+    const x = JSON.parse(raw);
+    return {
+      ...emptyStore(),
+      ...x,
+      company: x.company || null,
+      packages: Array.isArray(x.packages) ? x.packages : [],
+      customers: Array.isArray(x.customers) ? x.customers : [],
+      collectors: Array.isArray(x.collectors) ? x.collectors : [],
+      payments: Array.isArray(x.payments) ? x.payments : [],
+      counters: {...emptyStore().counters, ...(x.counters||{})}
+    };
+  }catch(e){ STORAGE_OK = false; }
+  return emptyStore();
+}
+let CACHE = loadStore();
+
+function localPersist(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(CACHE)); }
+  catch(e){ STORAGE_OK=false; }
+}
+function sanitizeCloudStore(){
+  const copy = JSON.parse(JSON.stringify(CACHE));
+  if(copy.company) delete copy.company.adminPasswordHash;
+  (copy.collectors||[]).forEach(c=>delete c.passwordHash);
+  return copy;
+}
+async function initCloud(){
+  if(!CLOUD_CONFIG.url || !CLOUD_CONFIG.anonKey || !window.supabase) return false;
+  try{
+    SB = window.supabase.createClient(CLOUD_CONFIG.url, CLOUD_CONFIG.anonKey, {
+      auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true}
+    });
+    CLOUD_ENABLED = true;
+    return true;
+  }catch(e){
+    CLOUD_ENABLED = false;
+    return false;
+  }
+}
+async function cloudProfile(){
+  if(!SB) return null;
+  const {data:{user}} = await SB.auth.getUser();
+  if(!user) return null;
+  const {data:profile,error} = await SB.from('profiles').select('*').eq('id',user.id).single();
+  if(error) throw error;
+  return {user,profile};
+}
+async function cloudPull(){
+  const cp = await cloudProfile();
+  if(!cp) return false;
+  const {user,profile}=cp;
+  CLOUD_COMPANY_ID = profile.company_id;
+  const {data:company,error:ce} = await SB.from('companies').select('*').eq('id',profile.company_id).single();
+  if(ce) throw ce;
+  const {data:row,error:de} = await SB.from('company_data').select('data,updated_at').eq('company_id',profile.company_id).single();
+  if(de) throw de;
+  CACHE = row?.data || emptyStore();
+  CACHE.company = CACHE.company || {};
+  CACHE.company.cloudCompanyId = company.id;
+  CACHE.company.companyName = company.name;
+  CACHE.company.adminName = company.admin_name || CACHE.company.adminName || '';
+  CACHE.company.adminEmail = company.admin_email || CACHE.company.adminEmail || user.email || '';
+  localPersist();
+  CLOUD_LAST_REMOTE = row?.updated_at ? Date.parse(row.updated_at) : Date.now();
+  startRealtime();
+  return true;
+}
+async function cloudPush(){
+  if(!CLOUD_ENABLED || !SB || !CLOUD_COMPANY_ID) return;
+  const data = sanitizeCloudStore();
+  const {error} = await SB.from('company_data').upsert(
+    {company_id:CLOUD_COMPANY_ID,data,updated_at:new Date().toISOString()},
+    {onConflict:'company_id'}
+  );
+  if(error) throw error;
+  CLOUD_LAST_REMOTE = Date.now();
+}
+function persist(){
+  localPersist();
+  if(!CLOUD_ENABLED || !CLOUD_COMPANY_ID) return;
+  CLOUD_SYNC_CHAIN = CLOUD_SYNC_CHAIN.then(()=>cloudPush()).catch(err=>{
+    console.error('Cloud sync error',err);
+    toast('Cloud sync failed — check internet connection','err');
+  });
+}
+function startRealtime(){
+  if(!SB || !CLOUD_COMPANY_ID) return;
+  if(CLOUD_SUB) SB.removeChannel(CLOUD_SUB);
+  CLOUD_SUB = SB.channel('isp-company-'+CLOUD_COMPANY_ID)
+    .on('postgres_changes',
+      {event:'*',schema:'public',table:'company_data',filter:'company_id=eq.'+CLOUD_COMPANY_ID},
+      async payload=>{
+        if(!payload.new?.data) return;
+        const ts = payload.new.updated_at ? Date.parse(payload.new.updated_at) : Date.now();
+        if(ts < CLOUD_LAST_REMOTE) return;
+        CLOUD_LAST_REMOTE = ts;
+        CACHE = payload.new.data;
+        localPersist();
+        if(SESSION) render();
+        toast('Data synced','ok');
+      })
+    .subscribe();
+}
+async function cloudRegister(formData){
+  if(!CLOUD_ENABLED) throw new Error('Online mode is not configured. Add Supabase URL and anon key in config.js.');
+  const email = String(formData.get('adminEmail')).trim().toLowerCase();
+  const password = String(formData.get('password'));
+  const {data,error} = await SB.auth.signUp({email,password});
+  if(error) throw error;
+  if(!data.session || !data.user) throw new Error('Account created, but email confirmation is enabled. Disable “Confirm email” in Supabase Auth settings, then register again.');
+  const companyId = uid();
+  const company = {
+    id:companyId,
+    name:String(formData.get('companyName')).trim(),
+    address:String(formData.get('address')||'').trim(),
+    phone:String(formData.get('phone')||'').trim(),
+    admin_name:String(formData.get('adminName')).trim(),
+    admin_email:email,
+    owner_id:data.user.id
+  };
+  let r = await SB.from('companies').insert(company).select().single();
+  if(r.error) throw r.error;
+  r = await SB.from('profiles').insert({id:data.user.id,company_id:companyId,role:'admin',display_name:company.admin_name,username:null}).select().single();
+  if(r.error) throw r.error;
+  const base = emptyStore();
+  base.company = {
+    cloudCompanyId:companyId, companyName:company.name, address:company.address, phone:company.phone,
+    adminName:company.admin_name, adminEmail:email, createdAt:new Date().toISOString()
+  };
+  const {error:de} = await SB.from('company_data').insert({company_id:companyId,data:base});
+  if(de) throw de;
+  CACHE=base; CLOUD_COMPANY_ID=companyId; localPersist(); startRealtime();
+  return {user:data.user,company};
+}
+function collectorAuthEmail(username){
+  return String(username).trim().toLowerCase()+'@collector.isp.local';
+}
+async function cloudLoginAdmin(email,password){
+  const {error} = await SB.auth.signInWithPassword({email,password});
+  if(error) throw error;
+  await cloudPull();
+  return 'admin';
+}
+async function cloudLoginCollector(username,password){
+  const {error} = await SB.auth.signInWithPassword({email:collectorAuthEmail(username),password});
+  if(error) throw error;
+  const cp = await cloudProfile();
+  if(!cp || cp.profile.role!=='collector') throw new Error('This account is not a collector account.');
+  const c = (CACHE.collectors||[]).find(x=>x.username===username);
+  if(c && c.status!=='Active') throw new Error('This account is disabled');
+  await cloudPull();
+  return 'collector';
+}
+async function cloudCreateCollector({name,username,mobile,password,status}){
+  const secondary = window.supabase.createClient(CLOUD_CONFIG.url,CLOUD_CONFIG.anonKey,{
+    auth:{persistSession:false,autoRefreshToken:false}
+  });
+  const email=collectorAuthEmail(username);
+  const {data,error}=await secondary.auth.signUp({email,password});
+  if(error) throw error;
+  if(!data.user) throw new Error('Could not create collector login');
+  const id=uid();
+  const {error:pe}=await SB.from('profiles').insert({
+    id:data.user.id,company_id:CLOUD_COMPANY_ID,role:'collector',display_name:name,username
+  });
+  if(pe) throw pe;
+  CACHE.collectors.push({id,name,username,mobile,status});
+  persist();
+}
+async function cloudUpdateCollectorPassword(username,newPassword){
+  throw new Error('For security, reset collector passwords from Supabase Auth or create a new collector account.');
+}
+async function cloudLogout(){
+  if(CLOUD_SUB && SB){ await SB.removeChannel(CLOUD_SUB); CLOUD_SUB=null; }
+  CLOUD_COMPANY_ID=null;
+  if(SB) await SB.auth.signOut();
+}
+async function cloudInitSession(){
+  if(!CLOUD_ENABLED) return false;
+  const {data:{session}} = await SB.auth.getSession();
+  if(!session) return false;
+  try{ return await cloudPull(); }catch(e){
+    console.error(e);
+    await SB.auth.signOut();
+    return false;
+  }
+}
+
+/* ============================= STATE ============================= */
+let SESSION = null;
+let VIEW = 'boot';
+let MODAL = null;
+let SELECTED_MONTH = new Date().getMonth()+1;
+let SELECTED_YEAR = new Date().getFullYear();
+let SEARCH_Q = '';
+let PAY_FILTERS = { month:'', year:'', collector:'', method:'' };
+let COLLECT_CUSTOMER = null;
+let LAST_RECEIPT = null;
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+/* ============================= UTILS ============================= */
+function pad(n,l){ n=String(n); while(n.length<l) n='0'+n; return n; }
+function fmtInt(n){
+  n = Math.round(Number(n)||0);
+  const neg = n<0; n = Math.abs(n);
+  let s = String(n);
+  let last3 = s.slice(-3);
+  let rest = s.slice(0,-3);
+  if(rest !== ''){ rest = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ','); last3 = ',' + last3; }
+  return (neg?'-':'') + rest + last3;
+}
+function fmtBDT(n){ return '৳' + fmtInt(n); }
+function fmtDate(d){
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if(isNaN(dt.getTime())) return '—';
+  return pad(dt.getDate(),2)+'-'+pad(dt.getMonth()+1,2)+'-'+dt.getFullYear();
+}
+function dhakaParts(d){
+  const dt = (d instanceof Date) ? d : new Date(d);
+  const parts = new Intl.DateTimeFormat('en-GB',{
+    timeZone:'Asia/Dhaka', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', hour12:false
+  }).formatToParts(dt);
+  const o={}; parts.forEach(p=>o[p.type]=p.value); return o;
+}
+function fmtDateTime(d){
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if(isNaN(dt.getTime())) return '—';
+  let h = dt.getHours(); const ampm = h>=12?'PM':'AM'; h = h%12; if(h===0) h=12;
+  return fmtDate(dt) + ' ' + pad(h,2)+':'+pad(dt.getMinutes(),2)+' '+ampm;
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toHex(buf){ return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+async function hashPass(id, pass){
+  const enc = new TextEncoder().encode('isp-app::' + String(id).toLowerCase().trim() + '::' + pass);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return toHex(buf);
+}
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(16).slice(2)); }
+function toast(msg, kind){
+  const host = document.getElementById('toast-host');
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind ? ' '+kind : '');
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 2600);
+}
+function saveSession(){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION)); }catch(e){} }
+function loadSession(){ try{ const s = localStorage.getItem(SESSION_KEY); if(s) SESSION = JSON.parse(s); }catch(e){ SESSION = null; } }
+function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} SESSION = null; }
+
+/* ============================= LOCAL "DB" HELPERS ============================= */
+async function nextCustomerId(){
+  CACHE.counters = CACHE.counters || {customerSeq:0, receiptSeq:0};
+  CACHE.counters.customerSeq = (CACHE.counters.customerSeq||0) + 1;
+  persist();
+  return 'CUST-' + pad(CACHE.counters.customerSeq,4);
+}
+async function nextReceiptNo(){
+  CACHE.counters = CACHE.counters || {customerSeq:0, receiptSeq:0};
+  CACHE.counters.receiptSeq = (CACHE.counters.receiptSeq||0) + 1;
+  persist();
+  return 'REC-' + pad(CACHE.counters.receiptSeq,6);
+}
+
+/* ============================= DERIVED / LEDGER LOGIC ============================= */
+function monthsElapsed(customer, asOfYear, asOfMonth){
+  const created = new Date(customer.createdAt);
+  if(isNaN(created.getTime())) return 0;
+  const cy = created.getFullYear(), cm = created.getMonth()+1;
+  const diff = (asOfYear - cy)*12 + (asOfMonth - cm) + 1;
+  return Math.max(diff, 0);
+}
+function totalPaidByCustomer(customerId, upToYear, upToMonth){
+  let sum = 0;
+  for(const p of CACHE.payments){
+    if(p.customerId !== customerId) continue;
+    if(upToYear==null){ sum += Number(p.amount)||0; continue; }
+    if(p.year < upToYear || (p.year===upToYear && p.month<=upToMonth)) sum += Number(p.amount)||0;
+  }
+  return sum;
+}
+function ledgerDue(customer, asOfYear, asOfMonth){
+  const months = monthsElapsed(customer, asOfYear, asOfMonth);
+  const billed = months * (Number(customer.monthlyBill)||0);
+  const paid = totalPaidByCustomer(customer.id, asOfYear, asOfMonth);
+  return billed - paid;
+}
+function paymentsInMonth(year, month){ return CACHE.payments.filter(p=>p.year===year && p.month===month); }
+function collectorPaymentsInMonth(collectorId, year, month){ return CACHE.payments.filter(p=>p.collectorId===collectorId && p.year===year && p.month===month); }
+function isToday(dateIso){
+  const d = new Date(dateIso); const t = new Date();
+  return d.getFullYear()===t.getFullYear() && d.getMonth()===t.getMonth() && d.getDate()===t.getDate();
+}
+function activeCustomersAsOf(year, month){
+  const endOfMonth = new Date(year, month, 0, 23,59,59);
+  return CACHE.customers.filter(c=>{
+    if(c.status !== 'Active') return false;
+    const created = new Date(c.createdAt);
+    return created <= endOfMonth;
+  });
+}
+function packageName(id){ const p = CACHE.packages.find(x=>x.id===id); return p ? p.name : '—'; }
+
+/* ============================= INIT ============================= */
+async function init(){
+  loadSession();
+  await initCloud();
+  if(CLOUD_ENABLED){
+    const hasCloudSession = await cloudInitSession();
+    if(!hasCloudSession){
+      // Do not trust old offline sessions in online mode.
+      SESSION = null;
+      try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
+    }
+  }
+  render();
+}
+init();
+
+/* ============================= RENDER DISPATCH ============================= */
+function closeModal(){
+  MODAL = null;
+  const root = document.getElementById('modal-root');
+  if(root) root.innerHTML = '';
+  document.body.classList.remove('modal-open');
+}
+
+function render(){
+  const app = document.getElementById('app');
+  const modalRoot = document.getElementById('modal-root');
+
+  if(modalRoot){
+    modalRoot.innerHTML = '';
+    document.body.classList.toggle('modal-open', !!MODAL);
+  }
+
+  if(!STORAGE_OK){ app.innerHTML = renderUnavailable(); return; }
+  if(!CACHE.company){ app.innerHTML = renderRegister(); attachRegisterHandlers(); return; }
+  if(!SESSION){ app.innerHTML = renderLogin(); attachLoginHandlers(); return; }
+  if(SESSION.role === 'collector'){
+    const c = CACHE.collectors.find(x=>x.id===SESSION.id);
+    if(!c || c.status !== 'Active'){ clearSession(); render(); return; }
+  }
+  app.innerHTML = renderShell();
+
+  if(modalRoot && MODAL){
+    modalRoot.innerHTML = renderModal();
+    document.body.classList.add('modal-open');
+    attachModalHandlers();
+  }
+  attachShellHandlers();
+}
+function renderUnavailable(){
+  return `<div class="center-screen"><div class="card" style="max-width:420px;text-align:center;">
+    <div style="font-size:26px;margin-bottom:8px;">⚠️</div>
+    <h2 style="margin:0 0 8px 0;font-size:16px;">Local storage isn't available</h2>
+    <p style="color:var(--ink-soft);font-size:13.5px;margin:0;">This browser has storage disabled (private/incognito mode can do this). Open this file in a normal browser window.</p>
+  </div></div>`;
+}
+
+/* ============================= REGISTRATION ============================= */
+function renderRegister(){
+  return `
+  <div class="center-screen">
+    <div class="loginwrap">
+      <div class="brandhead"><div class="mark">₸</div><div class="t">Set up your ISP</div></div>
+      <div class="card">
+        <p style="margin:0 0 16px 0;color:var(--ink-soft);font-size:13px;">Create your cloud company account. Admin and collector data will be shared across devices.</p>
+        <form id="registerForm">
+          <div class="field"><label>ISP company name</label><input class="input" name="companyName" required placeholder="e.g. ABC Internet Service"></div>
+          <div class="formrow">
+            <div class="field"><label>Company address</label><input class="input" name="address" placeholder="Optional"></div>
+            <div class="field"><label>Company phone</label><input class="input" name="phone" placeholder="Optional"></div>
+          </div>
+          <div class="field"><label>Admin name</label><input class="input" name="adminName" required placeholder="Your name"></div>
+          <div class="field"><label>Admin email</label><input class="input" type="email" name="adminEmail" required placeholder="admin@company.com"></div>
+          <div class="formrow">
+            <div class="field"><label>Password</label><input class="input" type="password" name="password" required minlength="4"></div>
+            <div class="field"><label>Confirm password</label><input class="input" type="password" name="confirm" required minlength="4"></div>
+          </div>
+          <button class="btn primary block" type="submit">Create company account</button>
+          <p style="margin:14px 0 0 0;color:var(--ink-soft);font-size:11.5px;">Already set this up on another device? Use Restore backup from that device's Settings page to bring the data here instead of registering again.</p>
+        </form>
+      </div>
+    </div>
+  </div>`;
+}
+function attachRegisterHandlers(){
+  const f = document.getElementById('registerForm');
+  if(!f) return;
+  f.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(f);
+    if(fd.get('password') !== fd.get('confirm')){ toast('Passwords do not match', 'err'); return; }
+    const email = String(fd.get('adminEmail')).trim().toLowerCase();
+    const btn = f.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Creating…';
+    try{
+      if(CLOUD_ENABLED){
+        const r = await cloudRegister(fd);
+        SESSION = { role:'admin', id:r.user.id, name:r.company.admin_name, email };
+      }else{
+        const hash = await hashPass(email, fd.get('password'));
+        CACHE.company = {
+          companyName: String(fd.get('companyName')).trim(),
+          address: String(fd.get('address')||'').trim(),
+          phone: String(fd.get('phone')||'').trim(),
+          adminName: String(fd.get('adminName')).trim(),
+          adminEmail: email, adminPasswordHash: hash,
+          createdAt: new Date().toISOString()
+        };
+        CACHE.counters = {customerSeq:0, receiptSeq:0};
+        persist();
+        SESSION = { role:'admin', id:'admin', name: CACHE.company.adminName, email };
+      }
+      saveSession();
+      toast('Company account created', 'ok');
+      render();
+    }catch(err){ toast(err.message||'Could not create account','err'); btn.disabled=false; btn.textContent='Create company account'; }
+  });
+}
+
+/* ============================= LOGIN ============================= */
+let LOGIN_TAB = 'admin';
+function renderLogin(){
+  const co = CACHE.company || {};
+  return `
+  <div class="center-screen">
+    <div class="loginwrap">
+      <div class="brandhead"><div class="mark">₸</div><div class="t">${esc(co.companyName||'ISP Billing')}</div></div>
+      <div style="text-align:center;margin-bottom:14px;"><span class="offlinepill">● Cloud sync enabled</span></div>
+      <div class="card">
+        <div class="tabs">
+          <button type="button" data-login-tab="admin" class="${LOGIN_TAB==='admin'?'active':''}">Admin</button>
+          <button type="button" data-login-tab="collector" class="${LOGIN_TAB==='collector'?'active':''}">Collector</button>
+        </div>
+        ${LOGIN_TAB==='admin' ? `
+        <form id="loginAdminForm">
+          <div class="field"><label>Admin email</label><input class="input" type="email" name="email" required></div>
+          <div class="field"><label>Password</label><input class="input" type="password" name="password" required></div>
+          <button class="btn primary block" type="submit">Log in</button>
+        </form>` : `
+        <form id="loginCollectorForm">
+          <div class="field"><label>Username</label><input class="input" name="username" required autocapitalize="off"></div>
+          <div class="field"><label>Password</label><input class="input" type="password" name="password" required></div>
+          <button class="btn primary block" type="submit">Log in</button>
+        </form>`}
+      </div>
+    </div>
+  </div>`;
+}
+function attachLoginHandlers(){
+  document.querySelectorAll('[data-login-tab]').forEach(b=>b.addEventListener('click', ()=>{ LOGIN_TAB = b.getAttribute('data-login-tab'); render(); }));
+  const af = document.getElementById('loginAdminForm');
+  if(af) af.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(af); const email = String(fd.get('email')).trim().toLowerCase();
+    const btn=af.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='Signing in…';
+    try{
+      if(CLOUD_ENABLED){
+        await cloudLoginAdmin(email, String(fd.get('password')));
+        const cp=await cloudProfile();
+        SESSION={role:'admin',id:cp.user.id,name:cp.profile.display_name||CACHE.company.adminName,email};
+      }else{
+        const hash = await hashPass(email, fd.get('password')); const co=CACHE.company;
+        if(!co || co.adminEmail!==email || co.adminPasswordHash!==hash) throw new Error('Incorrect email or password');
+        SESSION={role:'admin',id:'admin',name:co.adminName,email};
+      }
+      saveSession(); VIEW='dashboard'; toast('Welcome back, '+SESSION.name,'ok'); render();
+    }catch(err){ toast(err.message||'Incorrect email or password','err'); btn.disabled=false; btn.textContent='Log in'; }
+  });
+  const cf = document.getElementById('loginCollectorForm');
+  if(cf) cf.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(cf); const username=String(fd.get('username')).trim().toLowerCase();
+    const btn=cf.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='Signing in…';
+    try{
+      if(CLOUD_ENABLED){
+        await cloudLoginCollector(username,String(fd.get('password')));
+        const collector=CACHE.collectors.find(c=>c.username===username);
+        if(!collector) throw new Error('Collector profile not found');
+        SESSION={role:'collector',id:collector.id,name:collector.name,username};
+      }else{
+        const collector=CACHE.collectors.find(c=>c.username===username);
+        if(!collector) throw new Error('Incorrect username or password');
+        if(collector.status!=='Active') throw new Error('This account is disabled');
+        const hash=await hashPass(username,fd.get('password'));
+        if(collector.passwordHash!==hash) throw new Error('Incorrect username or password');
+        SESSION={role:'collector',id:collector.id,name:collector.name,username};
+      }
+      saveSession(); VIEW='cdashboard'; toast('Welcome, '+SESSION.name,'ok'); render();
+    }catch(err){ toast(err.message||'Incorrect username or password','err'); btn.disabled=false; btn.textContent='Log in'; }
+  });
+}
+
+/* ============================= SHELL ============================= */
+const ADMIN_NAV = [
+  {id:'dashboard', label:'Dashboard', ic:'▦'}, {id:'customers', label:'Customers', ic:'👤'},
+  {id:'packages', label:'Packages', ic:'📶'}, {id:'payments', label:'Payments', ic:'৳'},
+  {id:'due', label:'Due list', ic:'⚠'}, {id:'collectors', label:'Collectors', ic:'🧑‍💼'},
+  {id:'reports', label:'Reports', ic:'📊'}, {id:'settings', label:'Settings', ic:'⚙'},
+];
+const COLLECTOR_NAV = [
+  {id:'cdashboard', label:'Dashboard', ic:'▦'}, {id:'ccollect', label:'Collect bill', ic:'৳'}, {id:'cmine', label:'My collections', ic:'🧾'},
+];
+function currentNav(){ return SESSION.role==='admin' ? ADMIN_NAV : COLLECTOR_NAV; }
+function ensureValidView(){ const ids = currentNav().map(n=>n.id); if(!ids.includes(VIEW)) VIEW = ids[0]; }
+
+function renderShell(){
+  ensureValidView();
+  const nav = currentNav();
+  const co = CACHE.company || {};
+  return `
+  <div class="appshell">
+    <div class="topbar">
+      <div class="brand"><div class="brand-mark">₸</div><div class="brand-name">${esc(co.companyName||'ISP Billing')}</div></div>
+      <button class="logout" data-action="logout">Log out</button>
+    </div>
+    <div class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">₸</div>
+        <div><div class="brand-name">${esc(co.companyName||'ISP Billing')}</div><div class="brand-role">${SESSION.role==='admin'?'Admin':'Collector'} · cloud</div></div>
+      </div>
+      <ul class="navlist">${nav.map(n=>`<li><button class="navlink ${VIEW===n.id?'active':''}" data-nav="${n.id}"><span class="ic">${n.ic}</span><span>${n.label}</span></button></li>`).join('')}</ul>
+      <div class="sidebar-foot">
+        <div class="who"><b>${esc(SESSION.name)}</b>${esc(SESSION.role==='admin'?(SESSION.email||''):('@'+SESSION.username))}</div>
+        <button class="navlink" data-action="logout"><span class="ic">↪</span><span>Log out</span></button>
+      </div>
+    </div>
+    <div class="main">${renderCurrentView()}</div>
+    <div class="bottomnav">${nav.map(n=>`<button class="navlink ${VIEW===n.id?'active':''}" data-nav="${n.id}"><span class="ic">${n.ic}</span><span>${n.label}</span></button>`).join('')}</div>
+  </div>`;
+}
+function renderCurrentView(){
+  if(SESSION.role==='admin'){
+    switch(VIEW){
+      case 'dashboard': return viewAdminDashboard();
+      case 'customers': return viewCustomers();
+      case 'packages': return viewPackages();
+      case 'payments': return viewPayments();
+      case 'due': return viewDue();
+      case 'collectors': return viewCollectors();
+      case 'reports': return viewReports();
+      case 'settings': return viewSettings();
+      default: return '';
+    }
+  } else {
+    switch(VIEW){
+      case 'cdashboard': return viewCollectorDashboard();
+      case 'ccollect': return viewCollect();
+      case 'cmine': return viewMyCollections();
+      default: return '';
+    }
+  }
+}
+function attachShellHandlers(){
+  document.querySelectorAll('[data-nav]').forEach(b=>b.addEventListener('click', ()=>{ VIEW = b.getAttribute('data-nav'); COLLECT_CUSTOMER=null; render(); }));
+  document.querySelectorAll('[data-action="logout"]').forEach(b=>b.addEventListener('click', async ()=>{
+    if(CLOUD_ENABLED) await cloudLogout();
+    clearSession(); VIEW='boot'; render();
+  }));
+  attachViewHandlers();
+}
+
+/* ============================= ADMIN: DASHBOARD ============================= */
+function viewAdminDashboard(){
+  const now = new Date(); const y = now.getFullYear(), m = now.getMonth()+1;
+  const active = activeCustomersAsOf(y,m);
+  const monthPays = paymentsInMonth(y,m);
+  const thisMonthTotal = monthPays.reduce((s,p)=>s+Number(p.amount||0),0);
+  const todayTotal = CACHE.payments.filter(p=>isToday(p.date)).reduce((s,p)=>s+Number(p.amount||0),0);
+  const totalDue = active.reduce((s,c)=>s+Math.max(ledgerDue(c,y,m),0),0);
+  const paidCustomerIds = new Set(monthPays.map(p=>p.customerId));
+  const paidCount = active.filter(c=>paidCustomerIds.has(c.id)).length;
+  const dueCount = active.length - paidCount;
+  const months = [];
+  for(let i=8;i>=0;i--){ const d = new Date(y, m-1-i, 1); months.push({y:d.getFullYear(), m:d.getMonth()+1, label:MONTHS[d.getMonth()].slice(0,3)}); }
+  const maxVal = Math.max(1, ...months.map(mo=>paymentsInMonth(mo.y,mo.m).reduce((s,p)=>s+Number(p.amount||0),0)));
+  const bars = months.map(mo=>{
+    const total = paymentsInMonth(mo.y,mo.m).reduce((s,p)=>s+Number(p.amount||0),0);
+    const h = Math.max(2, Math.round((total/maxVal)*100));
+    const isNow = mo.y===y && mo.m===m;
+    return `<div class="bar-wrap"><div class="bar ${isNow?'now':''}" style="height:${h}%" title="${MONTHS[mo.m-1]} ${mo.y}: ${fmtBDT(total)}"></div><div class="mlabel">${mo.label}</div></div>`;
+  }).join('');
+  return `
+  <div class="pagehead"><div><h1>Dashboard</h1><div class="sub">${MONTHS[m-1]} ${y} · Asia/Dhaka</div></div></div>
+  <div class="grid grid-stats" style="margin-bottom:22px;">
+    <div class="stat"><div class="label">Total customers</div><div class="value">${fmtInt(CACHE.customers.length)}</div></div>
+    <div class="stat brand"><div class="label">This month collection</div><div class="value">${fmtBDT(thisMonthTotal)}</div></div>
+    <div class="stat gold"><div class="label">Today's collection</div><div class="value">${fmtBDT(todayTotal)}</div></div>
+    <div class="stat red"><div class="label">Total due</div><div class="value">${fmtBDT(totalDue)}</div></div>
+    <div class="stat brand"><div class="label">Paid customers</div><div class="value">${fmtInt(paidCount)}</div></div>
+    <div class="stat red"><div class="label">Due customers</div><div class="value">${fmtInt(dueCount)}</div></div>
+  </div>
+  <div class="card" style="margin-bottom:22px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+      <div style="font-weight:600;font-size:14px;">Monthly collection</div><div style="font-size:12px;color:var(--ink-soft);">Last 9 months</div>
+    </div>
+    <div class="barchart">${bars}</div>
+  </div>
+  <div class="section-title">Collector-wise collection — ${MONTHS[m-1]}</div>
+  ${renderCollectorWiseTable(y,m)}
+  `;
+}
+function renderCollectorWiseTable(y,m){
+  if(!CACHE.collectors.length) return `<div class="card"><div class="empty">No collectors yet. Add one from Collectors.</div></div>`;
+  const rows = CACHE.collectors.map(c=>{
+    const monthPays = collectorPaymentsInMonth(c.id, y, m);
+    const todayTotal = CACHE.payments.filter(p=>p.collectorId===c.id && isToday(p.date)).reduce((s,p)=>s+Number(p.amount||0),0);
+    const monthTotal = monthPays.reduce((s,p)=>s+Number(p.amount||0),0);
+    return `<tr><td>${esc(c.name)}</td><td class="num">${fmtBDT(todayTotal)}</td><td class="num">${fmtBDT(monthTotal)}</td><td class="num">${fmtInt(monthPays.length)}</td></tr>`;
+  }).join('');
+  return `<div class="tablewrap"><table><thead><tr><th>Collector</th><th>Today</th><th>This month</th><th>Payments</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/* ============================= ADMIN: CUSTOMERS ============================= */
+function viewCustomers(){
+  const q = SEARCH_Q.trim().toLowerCase();
+  let list = CACHE.customers.slice().sort((a,b)=>(a.id<b.id?-1:1));
+  if(q){ list = list.filter(c=> c.id.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || (c.mobile||'').includes(q)); }
+  const now = new Date(); const y=now.getFullYear(), m=now.getMonth()+1;
+  const rows = list.map(c=>{
+    const due = ledgerDue(c,y,m);
+    return `<tr>
+      <td class="mono">${esc(c.id)}</td><td>${esc(c.name)}</td><td class="mono">${esc(c.mobile||'—')}</td>
+      <td>${esc(packageName(c.packageId))}</td><td class="num">${fmtBDT(c.monthlyBill)}</td>
+      <td class="num">${due>0?`<span class="due-num">${fmtBDT(due)}</span>`:`<span class="credit-num">${due<0?'−'+fmtBDT(Math.abs(due)):fmtBDT(0)}</span>`}</td>
+      <td><span class="badge ${c.status==='Active'?'active':'inactive'}">${c.status}</span></td>
+      <td style="text-align:right;white-space:nowrap;"><button class="btn sm" data-edit-customer="${esc(c.id)}">Edit</button> <button class="btn sm" data-toggle-customer="${esc(c.id)}">${c.status==='Active'?'Disable':'Enable'}</button></td>
+    </tr>`;
+  }).join('');
+  return `
+  <div class="pagehead"><div><h1>Customers</h1><div class="sub">${fmtInt(CACHE.customers.length)} total</div></div>
+    <button class="btn primary" data-action="add-customer">+ Add customer</button>
+  </div>
+  <div class="toolbar"><input class="input" style="max-width:320px;" id="customerSearch" placeholder="Search by ID, name or mobile" value="${esc(SEARCH_Q)}"></div>
+  ${list.length ? `<div class="tablewrap"><table><thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Package</th><th>Monthly bill</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+  : `<div class="card"><div class="empty"><div class="big">👤</div>${q?'No customers match your search.':'No customers yet. Add your first customer to get started.'}</div></div>`}
+  `;
+}
+
+/* ============================= ADMIN: PACKAGES ============================= */
+function viewPackages(){
+  const rows = CACHE.packages.map(p=>`<tr>
+    <td>${esc(p.name)}</td><td class="mono">${esc(p.speed||'—')}</td><td class="num">${fmtBDT(p.price)}</td>
+    <td style="text-align:right;"><button class="btn sm" data-edit-package="${esc(p.id)}">Edit</button> <button class="btn sm danger" data-delete-package="${esc(p.id)}">Delete</button></td>
+  </tr>`).join('');
+  return `
+  <div class="pagehead"><div><h1>Packages</h1><div class="sub">${fmtInt(CACHE.packages.length)} packages</div></div>
+    <button class="btn primary" data-action="add-package">+ Add package</button>
+  </div>
+  ${CACHE.packages.length ? `<div class="tablewrap"><table><thead><tr><th>Package</th><th>Speed</th><th>Monthly price</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+  : `<div class="card"><div class="empty"><div class="big">📶</div>No packages yet. Add one — e.g. 20 Mbps at ৳700.</div></div>`}
+  `;
+}
+
+/* ============================= ADMIN: COLLECTORS ============================= */
+function viewCollectors(){
+  const now = new Date(); const y=now.getFullYear(), m=now.getMonth()+1;
+  const rows = CACHE.collectors.map(c=>{
+    const monthTotal = collectorPaymentsInMonth(c.id,y,m).reduce((s,p)=>s+Number(p.amount||0),0);
+    return `<tr>
+      <td>${esc(c.name)}</td><td class="mono">${esc(c.username)}</td><td class="mono">${esc(c.mobile||'—')}</td>
+      <td class="num">${fmtBDT(monthTotal)}</td><td><span class="badge ${c.status==='Active'?'active':'inactive'}">${c.status}</span></td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn sm" data-edit-collector="${esc(c.id)}">Edit</button>
+        <button class="btn sm" data-reset-collector="${esc(c.id)}">Reset password</button>
+        <button class="btn sm" data-toggle-collector="${esc(c.id)}">${c.status==='Active'?'Disable':'Enable'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `
+  <div class="pagehead"><div><h1>Collectors</h1><div class="sub">${fmtInt(CACHE.collectors.length)} accounts · cloud shared</div></div>
+    <button class="btn primary" data-action="add-collector">+ Add collector</button>
+  </div>
+  ${CACHE.collectors.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Username</th><th>Mobile</th><th>This month</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+  : `<div class="card"><div class="empty"><div class="big">🧑‍💼</div>No collector accounts yet.</div></div>`}
+  <div class="card" style="margin-top:18px;background:var(--gold-soft);border-color:var(--gold-soft);">
+    <b style="font-size:13px;">Cloud sync</b>
+    <p style="margin:6px 0 0 0;font-size:12.5px;color:var(--ink-soft);">Collector logins work on mobile and desktop. Payments are written to the cloud and appear in the Admin dashboard in real time. Keep your Supabase project secured with the provided RLS policies.</p>
+  </div>
+  `;
+}
+
+/* ============================= ADMIN: PAYMENTS ============================= */
+function viewPayments(){
+  let list = CACHE.payments.slice().sort((a,b)=> new Date(b.date) - new Date(a.date));
+  if(PAY_FILTERS.month) list = list.filter(p=>String(p.month)===String(PAY_FILTERS.month));
+  if(PAY_FILTERS.year) list = list.filter(p=>String(p.year)===String(PAY_FILTERS.year));
+  if(PAY_FILTERS.collector) list = list.filter(p=>p.collectorId===PAY_FILTERS.collector);
+  if(PAY_FILTERS.method) list = list.filter(p=>p.method===PAY_FILTERS.method);
+  const years = Array.from(new Set(CACHE.payments.map(p=>p.year))).sort((a,b)=>b-a);
+  const rows = list.map(p=>`<tr>
+    <td class="mono">${fmtDate(p.date)}</td><td>${esc(p.customerName)}</td>
+    <td>${MONTHS[p.month-1]?MONTHS[p.month-1].slice(0,3):'—'} ${p.year}</td>
+    <td class="num">${fmtBDT(p.amount)}</td><td><span class="badge method">${esc(p.method)}</span></td>
+    <td>${esc(p.collectorName)}</td><td class="mono">${esc(p.receiptNo)}</td>
+  </tr>`).join('');
+  return `
+  <div class="pagehead"><div><h1>Payments</h1><div class="sub">${fmtInt(list.length)} of ${fmtInt(CACHE.payments.length)} records</div></div></div>
+  <div class="toolbar">
+    <select class="input" style="max-width:150px;" id="fMonth"><option value="">All months</option>${MONTHS.map((mn,i)=>`<option value="${i+1}" ${String(PAY_FILTERS.month)===String(i+1)?'selected':''}>${mn}</option>`).join('')}</select>
+    <select class="input" style="max-width:120px;" id="fYear"><option value="">All years</option>${years.map(y=>`<option value="${y}" ${String(PAY_FILTERS.year)===String(y)?'selected':''}>${y}</option>`).join('')}</select>
+    <select class="input" style="max-width:180px;" id="fCollector"><option value="">All collectors</option>${CACHE.collectors.map(c=>`<option value="${c.id}" ${PAY_FILTERS.collector===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+    <select class="input" style="max-width:150px;" id="fMethod"><option value="">All methods</option>${['Cash','bKash','Nagad','Bank'].map(mm=>`<option ${PAY_FILTERS.method===mm?'selected':''}>${mm}</option>`).join('')}</select>
+  </div>
+  ${list.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Customer</th><th>Bill month</th><th>Amount</th><th>Method</th><th>Collected by</th><th>Receipt</th></tr></thead><tbody>${rows}</tbody></table></div>`
+  : `<div class="card"><div class="empty"><div class="big">৳</div>No payments match these filters.</div></div>`}
+  `;
+}
+
+/* ============================= ADMIN: DUE LIST ============================= */
+function viewDue(){
+  const now = new Date(); const y=now.getFullYear(), m=now.getMonth()+1;
+  const rows = CACHE.customers.filter(c=>c.status==='Active').map(c=>({c, due: ledgerDue(c,y,m)})).filter(x=>x.due > 0).sort((a,b)=>b.due-a.due);
+  return `
+  <div class="pagehead"><div><h1>Due list</h1><div class="sub">Customers with an outstanding balance as of ${MONTHS[m-1]} ${y}</div></div></div>
+  ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Monthly bill</th><th>Due amount</th></tr></thead><tbody>
+    ${rows.map(x=>`<tr><td class="mono">${esc(x.c.id)}</td><td>${esc(x.c.name)}</td><td class="mono">${esc(x.c.mobile||'—')}</td><td class="num">${fmtBDT(x.c.monthlyBill)}</td><td class="num due-num">${fmtBDT(x.due)}</td></tr>`).join('')}
+  </tbody></table></div>` : `<div class="card"><div class="empty"><div class="big">✅</div>No outstanding dues right now.</div></div>`}
+  `;
+}
+
+/* ============================= ADMIN: REPORTS ============================= */
+function viewReports(){
+  const y = SELECTED_YEAR, m = SELECTED_MONTH;
+  const active = activeCustomersAsOf(y,m);
+  const totalBill = active.reduce((s,c)=>s+Number(c.monthlyBill||0),0);
+  const monthPays = paymentsInMonth(y,m);
+  const collected = monthPays.reduce((s,p)=>s+Number(p.amount||0),0);
+  const due = active.reduce((s,c)=>s + Math.max(ledgerDue(c,y,m),0), 0);
+  const paidIds = new Set(monthPays.map(p=>p.customerId));
+  const paidCount = active.filter(c=>paidIds.has(c.id)).length;
+  const dueCount = active.length - paidCount;
+  const byMethod = {Cash:0, bKash:0, Nagad:0, Bank:0};
+  monthPays.forEach(p=>{ if(byMethod[p.method]!=null) byMethod[p.method]+=Number(p.amount||0); });
+  const years = Array.from(new Set([SELECTED_YEAR, ...CACHE.payments.map(p=>p.year), new Date().getFullYear()])).sort((a,b)=>b-a);
+  return `
+  <div class="pagehead"><div><h1>Reports</h1><div class="sub">Select a month to see the summary</div></div></div>
+  <div class="toolbar">
+    <select class="input" style="max-width:160px;" id="repMonth">${MONTHS.map((mn,i)=>`<option value="${i+1}" ${SELECTED_MONTH===i+1?'selected':''}>${mn}</option>`).join('')}</select>
+    <select class="input" style="max-width:120px;" id="repYear">${years.map(yy=>`<option value="${yy}" ${SELECTED_YEAR===yy?'selected':''}>${yy}</option>`).join('')}</select>
+    <div style="flex:1;"></div>
+    <button class="btn" data-action="print-report">Print report</button>
+    <button class="btn" data-action="pdf-report">Download PDF</button>
+    <button class="btn" data-action="csv-report">Export Excel (CSV)</button>
+  </div>
+  <div class="grid grid-stats" style="margin-bottom:22px;">
+    <div class="stat"><div class="label">Total bills — ${MONTHS[m-1]} ${y}</div><div class="value">${fmtBDT(totalBill)}</div></div>
+    <div class="stat brand"><div class="label">Total collection</div><div class="value">${fmtBDT(collected)}</div></div>
+    <div class="stat red"><div class="label">Total due</div><div class="value">${fmtBDT(due)}</div></div>
+    <div class="stat"><div class="label">Customers paid</div><div class="value">${fmtInt(paidCount)}</div></div>
+    <div class="stat"><div class="label">Customers due</div><div class="value">${fmtInt(dueCount)}</div></div>
+  </div>
+  <div class="section-title">Collection by method</div>
+  <div class="grid grid-stats">
+    <div class="stat"><div class="label">Cash</div><div class="value">${fmtBDT(byMethod.Cash)}</div></div>
+    <div class="stat"><div class="label">bKash</div><div class="value">${fmtBDT(byMethod.bKash)}</div></div>
+    <div class="stat"><div class="label">Nagad</div><div class="value">${fmtBDT(byMethod.Nagad)}</div></div>
+    <div class="stat"><div class="label">Bank</div><div class="value">${fmtBDT(byMethod.Bank)}</div></div>
+  </div>
+  <div id="print-area" style="display:none;">
+    <h2>${esc((CACHE.company||{}).companyName||'')} — Report for ${MONTHS[m-1]} ${y}</h2>
+    <p>Total bills: ${fmtBDT(totalBill)} · Collected: ${fmtBDT(collected)} · Due: ${fmtBDT(due)}</p>
+    <p>Customers paid: ${fmtInt(paidCount)} · Customers due: ${fmtInt(dueCount)}</p>
+    <p>Cash: ${fmtBDT(byMethod.Cash)} · bKash: ${fmtBDT(byMethod.bKash)} · Nagad: ${fmtBDT(byMethod.Nagad)} · Bank: ${fmtBDT(byMethod.Bank)}</p>
+  </div>
+  `;
+}
+
+/* ============================= ADMIN: SETTINGS ============================= */
+function viewSettings(){
+  const co = CACHE.company || {};
+  return `
+  <div class="pagehead"><div><h1>Settings</h1><div class="sub">Company details, password &amp; backups</div></div></div>
+  <div class="card" style="max-width:520px;margin-bottom:18px;">
+    <div class="section-title" style="margin-top:0;">Company details</div>
+    <form id="settingsCompanyForm">
+      <div class="field"><label>Company name</label><input class="input" name="companyName" value="${esc(co.companyName||'')}" required></div>
+      <div class="field"><label>Address</label><input class="input" name="address" value="${esc(co.address||'')}"></div>
+      <div class="field"><label>Phone</label><input class="input" name="phone" value="${esc(co.phone||'')}"></div>
+      <button class="btn primary" type="submit">Save changes</button>
+    </form>
+  </div>
+  <div class="card" style="max-width:520px;margin-bottom:18px;">
+    <div class="section-title" style="margin-top:0;">Change admin password</div>
+    <form id="settingsPasswordForm">
+      <div class="field"><label>New password</label><input class="input" type="password" name="password" minlength="4" required></div>
+      <div class="field"><label>Confirm new password</label><input class="input" type="password" name="confirm" minlength="4" required></div>
+      <button class="btn primary" type="submit">Update password</button>
+    </form>
+  </div>
+  <div class="card" style="max-width:520px;">
+    <div class="section-title" style="margin-top:0;">Backup &amp; restore</div>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 12px 0;">All data lives only in this browser on this device. Download a backup regularly, and use it to move or merge data between devices.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn" data-action="backup-data">Download backup</button>
+      <button class="btn" data-action="restore-data">Restore from backup</button>
+      <input type="file" id="restoreFile" accept="application/json" style="display:none;">
+    </div>
+  </div>
+  `;
+}
+
+/* ============================= COLLECTOR: DASHBOARD ============================= */
+function viewCollectorDashboard(){
+  const now = new Date(); const y=now.getFullYear(), m=now.getMonth()+1;
+  const mine = collectorPaymentsInMonth(SESSION.id, y, m);
+  const todayTotal = CACHE.payments.filter(p=>p.collectorId===SESSION.id && isToday(p.date)).reduce((s,p)=>s+Number(p.amount||0),0);
+  const monthTotal = mine.reduce((s,p)=>s+Number(p.amount||0),0);
+  return `
+  <div class="pagehead"><div><h1>Hi, ${esc(SESSION.name)}</h1><div class="sub">${MONTHS[m-1]} ${y}</div></div></div>
+  <div class="grid grid-stats" style="margin-bottom:22px;">
+    <div class="stat gold"><div class="label">Today's collection</div><div class="value">${fmtBDT(todayTotal)}</div></div>
+    <div class="stat brand"><div class="label">This month collection</div><div class="value">${fmtBDT(monthTotal)}</div></div>
+    <div class="stat"><div class="label">Payments this month</div><div class="value">${fmtInt(mine.length)}</div></div>
+  </div>
+  <button class="btn primary block" style="padding:14px;font-size:15px;" data-nav="ccollect">Collect bill</button>
+  `;
+}
+
+/* ============================= COLLECTOR: COLLECT BILL ============================= */
+function viewCollect(){
+  if(!COLLECT_CUSTOMER){
+    const q = SEARCH_Q.trim().toLowerCase();
+    let list = [];
+    if(q){ list = CACHE.customers.filter(c=> c.status==='Active' && (c.id.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || (c.mobile||'').includes(q)) ).slice(0,20); }
+    return `
+    <div class="pagehead"><div><h1>Collect bill</h1><div class="sub">Search a customer to begin</div></div></div>
+    <div class="field"><input class="input" id="collectSearch" placeholder="Search by ID, name or mobile number" value="${esc(SEARCH_Q)}" autofocus></div>
+    ${q ? (list.length ? `<div class="tablewrap"><table><thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th></th></tr></thead><tbody>
+      ${list.map(c=>`<tr><td class="mono">${esc(c.id)}</td><td>${esc(c.name)}</td><td class="mono">${esc(c.mobile||'—')}</td><td style="text-align:right;"><button class="btn sm primary" data-select-customer="${esc(c.id)}">Select</button></td></tr>`).join('')}
+    </tbody></table></div>` : `<div class="card"><div class="empty">No matching active customers.</div></div>`) : `<div class="card"><div class="empty" style="color:var(--ink-soft);">Start typing to find a customer.</div></div>`}
+    `;
+  }
+  const c = COLLECT_CUSTOMER;
+  const now = new Date(); const y=now.getFullYear(), m=now.getMonth()+1;
+  const totalPayable = Math.max(ledgerDue(c, y, m), 0);
+  const currentBill = Number(c.monthlyBill || 0);
+  const previousDue = Math.max(totalPayable - currentBill, 0);
+  return `
+  <div class="pagehead"><div><h1>Collect bill</h1><div class="sub">${esc(c.id)}</div></div>
+    <button class="btn" data-action="cancel-collect">← Back to search</button>
+  </div>
+  <div class="card" style="margin-bottom:16px;">
+    <div class="formrow">
+      <div><div class="field"><label>Customer</label><div style="font-weight:600;">${esc(c.name)}</div></div></div>
+      <div><div class="field"><label>Mobile</label><div class="mono">${esc(c.mobile||'—')}</div></div></div>
+      <div><div class="field"><label>Package</label><div>${esc(packageName(c.packageId))}</div></div></div>
+      <div><div class="field"><label>Monthly bill</label><div class="num">${fmtBDT(c.monthlyBill)}</div></div></div>
+      <div><div class="field"><label>Previous due</label><div class="num due-num">${fmtBDT(Math.max(previousDue,0))}</div></div></div>
+      <div><div class="field"><label>Total payable</label><div class="num" style="font-weight:700;">${fmtBDT(totalPayable)}</div></div></div>
+    </div>
+  </div>
+  <div class="card" style="max-width:420px;">
+    <form id="collectForm">
+      <div class="field"><label>Payment amount (৳)</label><input class="input" type="number" min="1" step="1" name="amount" value="${totalPayable>0?totalPayable:''}" required></div>
+      <div class="field"><label>Payment method</label>
+        <div class="pillrow" id="methodPills">${['Cash','bKash','Nagad','Bank'].map((mm,i)=>`<button type="button" class="pill ${i===0?'active':''}" data-method="${mm}">${mm}</button>`).join('')}</div>
+        <input type="hidden" name="method" value="Cash">
+      </div>
+      <button class="btn primary block" type="submit" style="padding:13px;font-size:14.5px;">Collect payment</button>
+    </form>
+  </div>
+  `;
+}
+
+/* ============================= COLLECTOR: MY COLLECTIONS ============================= */
+function viewMyCollections(){
+  const mine = CACHE.payments.filter(p=>p.collectorId===SESSION.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  return `
+  <div class="pagehead"><div><h1>My collections</h1><div class="sub">${fmtInt(mine.length)} payments collected</div></div></div>
+  ${mine.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Customer</th><th>Month</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead><tbody>
+    ${mine.map(p=>`<tr><td class="mono">${fmtDateTime(p.date)}</td><td>${esc(p.customerName)}</td><td>${MONTHS[p.month-1].slice(0,3)} ${p.year}</td><td class="num">${fmtBDT(p.amount)}</td><td><span class="badge method">${esc(p.method)}</span></td><td class="mono">${esc(p.receiptNo)}</td></tr>`).join('')}
+  </tbody></table></div>` : `<div class="card"><div class="empty">No collections yet.</div></div>`}
+  `;
+}
+
+/* ============================= MODAL RENDERING ============================= */
+function renderModal(){
+  if(!MODAL) return '';
+  let body = '';
+  if(MODAL.type === 'customer') body = modalCustomerForm(MODAL.data);
+  else if(MODAL.type === 'package') body = modalPackageForm(MODAL.data);
+  else if(MODAL.type === 'collector') body = modalCollectorForm(MODAL.data);
+  else if(MODAL.type === 'receipt') body = modalReceipt(MODAL.data);
+  return `<div class="modal-backdrop" id="modalBackdrop">${body}</div>`;
+}
+function modalCustomerForm(data){
+  const editing = !!data;
+  const pkgOptions = CACHE.packages.map(p=>`<option value="${esc(p.id)}" ${data&&data.packageId===p.id?'selected':''}>${esc(p.name)} — ${fmtBDT(p.price)}</option>`).join('');
+  return `<div class="modal">
+    <div class="modal-head"><h2>${editing?'Edit customer':'Add customer'}</h2><button class="modal-close" data-close-modal>&times;</button></div>
+    <form id="customerForm">
+      ${editing?`<div class="field"><label>Customer ID</label><input class="input mono" value="${esc(data.id)}" disabled></div>`:''}
+      <div class="field"><label>Customer name</label><input class="input" name="name" required value="${data?esc(data.name):''}"></div>
+      <div class="formrow">
+        <div class="field"><label>Mobile number</label><input class="input" name="mobile" value="${data?esc(data.mobile||''):''}"></div>
+        <div class="field"><label>Status</label><select class="input" name="status"><option ${!data||data.status==='Active'?'selected':''}>Active</option><option ${data&&data.status==='Inactive'?'selected':''}>Inactive</option></select></div>
+      </div>
+      <div class="field"><label>Address</label><input class="input" name="address" value="${data?esc(data.address||''):''}"></div>
+      <div class="field"><label>Package</label>
+        <select class="input" name="packageId" required ${CACHE.packages.length?'':'disabled'}>
+          <option value="">${CACHE.packages.length?'Select a package':'Add a package first'}</option>${pkgOptions}
+        </select>
+        <div class="hint">Monthly bill is taken from the package price.</div>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn block" data-close-modal>Cancel</button><button type="submit" class="btn primary block">${editing?'Save changes':'Add customer'}</button></div>
+    </form>
+  </div>`;
+}
+function modalPackageForm(data){
+  const editing = !!data;
+  return `<div class="modal">
+    <div class="modal-head"><h2>${editing?'Edit package':'Add package'}</h2><button class="modal-close" data-close-modal>&times;</button></div>
+    <form id="packageForm">
+      <div class="field"><label>Package name</label><input class="input" name="name" required value="${data?esc(data.name):''}" placeholder="e.g. 20 Mbps"></div>
+      <div class="formrow">
+        <div class="field"><label>Speed</label><input class="input" name="speed" value="${data?esc(data.speed||''):''}" placeholder="20 Mbps"></div>
+        <div class="field"><label>Monthly price (৳)</label><input class="input" type="number" min="0" name="price" required value="${data?esc(data.price):''}"></div>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn block" data-close-modal>Cancel</button><button type="submit" class="btn primary block">${editing?'Save changes':'Add package'}</button></div>
+    </form>
+  </div>`;
+}
+function modalCollectorForm(data){
+  const editing = !!data;
+  return `<div class="modal">
+    <div class="modal-head"><h2>${editing?'Edit collector':'Add collector'}</h2><button class="modal-close" data-close-modal>&times;</button></div>
+    <form id="collectorForm">
+      <div class="field"><label>Collector name</label><input class="input" name="name" required value="${data?esc(data.name):''}"></div>
+      <div class="formrow">
+        <div class="field"><label>Username</label><input class="input" name="username" required autocapitalize="off" ${editing?'disabled':''} value="${data?esc(data.username):''}"></div>
+        <div class="field"><label>Mobile number</label><input class="input" name="mobile" value="${data?esc(data.mobile||''):''}"></div>
+      </div>
+      ${editing?'':`<div class="field"><label>Password</label><input class="input" type="password" name="password" minlength="4" required></div>`}
+      <div class="field"><label>Status</label><select class="input" name="status"><option ${!data||data.status==='Active'?'selected':''}>Active</option><option ${data&&data.status==='Inactive'?'selected':''}>Inactive</option></select></div>
+      <div class="modal-actions"><button type="button" class="btn block" data-close-modal>Cancel</button><button type="submit" class="btn primary block">${editing?'Save changes':'Add collector'}</button></div>
+    </form>
+  </div>`;
+}
+function modalReceipt(r){
+  const co = CACHE.company || {};
+  return `<div class="modal">
+    <div class="modal-head"><h2>Payment collected</h2><button class="modal-close" data-close-modal>&times;</button></div>
+    <div id="print-area">
+    <div class="receipt">
+      <div class="rhead"><div class="co">${esc(co.companyName||'')}</div><div class="small">${esc(co.address||'')}</div><div class="small">${esc(co.phone||'')}</div></div>
+      <div class="rtitle">PAYMENT RECEIPT</div>
+      <div class="rrow"><span class="k">Receipt No</span><span>${esc(r.receiptNo)}</span></div>
+      <div class="rrow"><span class="k">Customer ID</span><span>${esc(r.customerId)}</span></div>
+      <div class="rrow"><span class="k">Customer Name</span><span>${esc(r.customerName)}</span></div>
+      <div class="rrow"><span class="k">Billing Month</span><span>${MONTHS[r.month-1]} ${r.year}</span></div>
+      <div class="rrow"><span class="k">Monthly Bill</span><span>${fmtBDT(r.billAmount)}</span></div>
+      <div class="rrow"><span class="k">Previous Due</span><span>${fmtBDT(Math.max(r.previousDue,0))}</span></div>
+      <div class="rrow"><span class="k">Paid</span><span>${fmtBDT(r.amount)}</span></div>
+      <div class="rrow total"><span class="k">Remaining Due</span><span>${r.remainingDue>0?fmtBDT(r.remainingDue):'৳0'}</span></div>
+      <div class="rrow"><span class="k">Payment Method</span><span>${esc(r.method)}</span></div>
+      <div class="rrow"><span class="k">Collected By</span><span>${esc(r.collectorName)}</span></div>
+      <div class="rrow"><span class="k">Date</span><span>${fmtDate(r.date)}</span></div>
+      <div class="rfoot">Thank you for your payment</div>
+    </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn block" data-action="print-receipt">Print receipt</button>
+      <button type="button" class="btn primary block" data-action="pdf-receipt">Download PDF</button>
+    </div>
+    <button type="button" class="btn ghost block" style="margin-top:8px;" data-close-modal>Done</button>
+  </div>`;
+}
+
+/* ============================= EVENT HANDLERS: VIEWS ============================= */
+function attachViewHandlers(){
+  const csearch = document.getElementById('customerSearch');
+  if(csearch) csearch.addEventListener('input', ()=>{ SEARCH_Q = csearch.value; render(); const el=document.getElementById('customerSearch'); if(el){el.focus(); el.setSelectionRange(el.value.length, el.value.length);} });
+  document.querySelectorAll('[data-action="add-customer"]').forEach(b=>b.addEventListener('click', ()=>{ MODAL={type:'customer', data:null}; render(); }));
+  document.querySelectorAll('[data-edit-customer]').forEach(b=>b.addEventListener('click', ()=>{ const c = CACHE.customers.find(x=>x.id===b.getAttribute('data-edit-customer')); MODAL={type:'customer', data:c}; render(); }));
+  document.querySelectorAll('[data-toggle-customer]').forEach(b=>b.addEventListener('click', ()=>{
+    const c = CACHE.customers.find(x=>x.id===b.getAttribute('data-toggle-customer')); if(!c) return;
+    c.status = c.status==='Active'?'Inactive':'Active'; persist(); toast('Customer updated','ok'); render();
+  }));
+
+  document.querySelectorAll('[data-action="add-package"]').forEach(b=>b.addEventListener('click', ()=>{ MODAL={type:'package', data:null}; render(); }));
+  document.querySelectorAll('[data-edit-package]').forEach(b=>b.addEventListener('click', ()=>{ const p = CACHE.packages.find(x=>x.id===b.getAttribute('data-edit-package')); MODAL={type:'package', data:p}; render(); }));
+  document.querySelectorAll('[data-delete-package]').forEach(b=>b.addEventListener('click', ()=>{
+    const id = b.getAttribute('data-delete-package');
+    const usedBy = CACHE.customers.filter(c=>c.packageId===id).length;
+    if(usedBy>0){ toast(`Can't delete — ${usedBy} customer(s) use this package`, 'err'); return; }
+    if(!confirm('Delete this package?')) return;
+    CACHE.packages = CACHE.packages.filter(p=>p.id!==id); persist(); toast('Package deleted','ok'); render();
+  }));
+
+  document.querySelectorAll('[data-action="add-collector"]').forEach(b=>b.addEventListener('click', ()=>{ MODAL={type:'collector', data:null}; render(); }));
+  document.querySelectorAll('[data-edit-collector]').forEach(b=>b.addEventListener('click', ()=>{ const c = CACHE.collectors.find(x=>x.id===b.getAttribute('data-edit-collector')); MODAL={type:'collector', data:c}; render(); }));
+  document.querySelectorAll('[data-toggle-collector]').forEach(b=>b.addEventListener('click', ()=>{
+    const c = CACHE.collectors.find(x=>x.id===b.getAttribute('data-toggle-collector')); if(!c) return;
+    c.status = c.status==='Active'?'Inactive':'Active'; persist(); toast('Collector updated','ok'); render();
+  }));
+  document.querySelectorAll('[data-reset-collector]').forEach(b=>b.addEventListener('click', async ()=>{
+    const c = CACHE.collectors.find(x=>x.id===b.getAttribute('data-reset-collector')); if(!c) return;
+    const np = prompt('Enter a new password for '+c.name+':'); if(!np) return;
+    if(np.length<4){ toast('Password must be at least 4 characters','err'); return; }
+    if(CLOUD_ENABLED){ toast('For online mode, reset this collector from Supabase Auth, or create a new collector account.','err'); return; }
+    c.passwordHash = await hashPass(c.username, np); persist(); toast('Password reset','ok'); render();
+  }));
+
+  ['fMonth','fYear','fCollector','fMethod'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', ()=>{
+      PAY_FILTERS = { month: document.getElementById('fMonth').value, year: document.getElementById('fYear').value, collector: document.getElementById('fCollector').value, method: document.getElementById('fMethod').value };
+      render();
+    });
+  });
+
+  const rm = document.getElementById('repMonth'), ry = document.getElementById('repYear');
+  if(rm) rm.addEventListener('change', ()=>{ SELECTED_MONTH = Number(rm.value); render(); });
+  if(ry) ry.addEventListener('change', ()=>{ SELECTED_YEAR = Number(ry.value); render(); });
+  document.querySelectorAll('[data-action="print-report"]').forEach(b=>b.addEventListener('click', ()=>{
+    const el = document.getElementById('print-area'); if(el) el.style.display='block';
+    window.print(); if(el) el.style.display='none';
+  }));
+  document.querySelectorAll('[data-action="pdf-report"]').forEach(b=>b.addEventListener('click', downloadReportPdf));
+  document.querySelectorAll('[data-action="csv-report"]').forEach(b=>b.addEventListener('click', downloadReportCsv));
+
+  const scf = document.getElementById('settingsCompanyForm');
+  if(scf) scf.addEventListener('submit', (e)=>{
+    e.preventDefault(); const fd = new FormData(scf);
+    CACHE.company.companyName = fd.get('companyName'); CACHE.company.address = fd.get('address')||''; CACHE.company.phone = fd.get('phone')||'';
+    persist(); toast('Company details saved','ok'); render();
+  });
+  const spf = document.getElementById('settingsPasswordForm');
+  if(spf) spf.addEventListener('submit', async (e)=>{
+    e.preventDefault(); const fd = new FormData(spf);
+    if(fd.get('password') !== fd.get('confirm')){ toast('Passwords do not match','err'); return; }
+    if(CLOUD_ENABLED){
+      const {error}=await SB.auth.updateUser({password:String(fd.get('password'))});
+      if(error){ toast(error.message,'err'); return; }
+    }else{
+      CACHE.company.adminPasswordHash = await hashPass(CACHE.company.adminEmail, fd.get('password'));
+      persist();
+    }
+    toast('Password updated','ok'); spf.reset();
+  });
+  document.querySelectorAll('[data-action="backup-data"]').forEach(b=>b.addEventListener('click', ()=>{
+    const blob = new Blob([JSON.stringify(CACHE,null,2)], {type:'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'isp-billing-backup-'+fmtDate(new Date()).replaceAll('-','')+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('Backup downloaded','ok');
+  }));
+  document.querySelectorAll('[data-action="restore-data"]').forEach(b=>b.addEventListener('click', ()=>{ document.getElementById('restoreFile').click(); }));
+  const rf = document.getElementById('restoreFile');
+  if(rf) rf.addEventListener('change', ()=>{
+    const file = rf.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const parsed = JSON.parse(reader.result);
+        if(!parsed || typeof parsed !== 'object'){ throw new Error('bad file'); }
+        if(!confirm('This will replace all current data on this device with the backup file. Continue?')) return;
+        CACHE = Object.assign({ company:null, packages:[], customers:[], collectors:[], payments:[], counters:{customerSeq:0, receiptSeq:0} }, parsed);
+        persist(); toast('Backup restored','ok'); render();
+      }catch(e){ toast('That file could not be read as a backup', 'err'); }
+    };
+    reader.readAsText(file);
+  });
+
+  const collectSearch = document.getElementById('collectSearch');
+  if(collectSearch) collectSearch.addEventListener('input', ()=>{ SEARCH_Q = collectSearch.value; render(); const el=document.getElementById('collectSearch'); if(el){el.focus(); el.setSelectionRange(el.value.length, el.value.length);} });
+  document.querySelectorAll('[data-select-customer]').forEach(b=>b.addEventListener('click', ()=>{ COLLECT_CUSTOMER = CACHE.customers.find(x=>x.id===b.getAttribute('data-select-customer')); SEARCH_Q=''; render(); }));
+  document.querySelectorAll('[data-action="cancel-collect"]').forEach(b=>b.addEventListener('click', ()=>{ COLLECT_CUSTOMER=null; render(); }));
+  document.querySelectorAll('[data-method]').forEach(b=>b.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-method]').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+    const hidden = document.querySelector('#collectForm input[name=method]'); if(hidden) hidden.value = b.getAttribute('data-method');
+  }));
+  const collectForm = document.getElementById('collectForm');
+  if(collectForm) collectForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(collectForm);
+    const amount = Number(fd.get('amount')); const method = fd.get('method');
+    if(!amount || amount<=0){ toast('Enter a valid amount','err'); return; }
+    const btn = collectForm.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='Saving…';
+    const c = COLLECT_CUSTOMER; const now = new Date(); const y = now.getFullYear(), m = now.getMonth()+1;
+    const previousDue = Math.max(ledgerDue(c,y,m),0);
+    const receiptNo = await nextReceiptNo();
+    const payment = { receiptNo, customerId:c.id, customerName:c.name, amount, method, month:m, year:y, date: now.toISOString(), collectorId: SESSION.id, collectorName: SESSION.name, billAmount: Number(c.monthlyBill||0), previousDue };
+    CACHE.payments.push(payment); persist();
+    LAST_RECEIPT = { ...payment, remainingDue: previousDue - amount };
+    COLLECT_CUSTOMER = null; SEARCH_Q='';
+    MODAL = { type:'receipt', data: LAST_RECEIPT };
+    toast('Payment collected','ok'); render();
+  });
+}
+
+/* ============================= EVENT HANDLERS: MODAL ============================= */
+if(!window.__ISP_MODAL_ESCAPE_BOUND){
+  window.__ISP_MODAL_ESCAPE_BOUND = true;
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape' && MODAL){ closeModal(); render(); }
+  });
+}
+function attachModalHandlers(){
+  const backdrop = document.getElementById('modalBackdrop');
+  if(backdrop) backdrop.addEventListener('click', (e)=>{
+    if(e.target===backdrop){ e.preventDefault(); closeModal(); render(); }
+  });
+  document.querySelectorAll('[data-close-modal]').forEach(b=>b.addEventListener('click', (e)=>{
+    e.preventDefault(); closeModal(); render();
+  }));
+
+  const cf = document.getElementById('customerForm');
+  if(cf) cf.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(cf);
+    const pkg = CACHE.packages.find(p=>p.id===fd.get('packageId'));
+    if(MODAL.data){
+      const c = CACHE.customers.find(x=>x.id===MODAL.data.id);
+      Object.assign(c, { name: fd.get('name'), mobile: fd.get('mobile')||'', address: fd.get('address')||'', status: fd.get('status'), packageId: fd.get('packageId'), monthlyBill: pkg?Number(pkg.price):Number(c.monthlyBill||0) });
+      persist(); toast('Customer updated','ok');
+    } else {
+      const id = await nextCustomerId();
+      CACHE.customers.push({ id, name: fd.get('name'), mobile: fd.get('mobile')||'', address: fd.get('address')||'', status: fd.get('status'), packageId: fd.get('packageId'), monthlyBill: pkg?Number(pkg.price):0, createdAt: new Date().toISOString() });
+      persist(); toast('Customer added','ok');
+    }
+    MODAL=null; render();
+  });
+
+  const pf = document.getElementById('packageForm');
+  if(pf) pf.addEventListener('submit', (e)=>{
+    e.preventDefault(); const fd = new FormData(pf);
+    if(MODAL.data){ const p = CACHE.packages.find(x=>x.id===MODAL.data.id); Object.assign(p, { name: fd.get('name'), speed: fd.get('speed')||'', price: Number(fd.get('price')) }); toast('Package updated','ok'); }
+    else { CACHE.packages.push({ id: uid(), name: fd.get('name'), speed: fd.get('speed')||'', price: Number(fd.get('price')) }); toast('Package added','ok'); }
+    persist(); MODAL=null; render();
+  });
+
+  const colf = document.getElementById('collectorForm');
+  if(colf) colf.addEventListener('submit', async (e)=>{
+    e.preventDefault(); const fd = new FormData(colf);
+    const username = String(fd.get('username')).trim().toLowerCase();
+    if(MODAL.data){
+      const c = CACHE.collectors.find(x=>x.id===MODAL.data.id);
+      Object.assign(c, { name: fd.get('name'), mobile: fd.get('mobile')||'', status: fd.get('status') });
+      persist(); toast('Collector updated','ok');
+    } else {
+      if(CACHE.collectors.find(c=>c.username===username)){ toast('That username is already taken','err'); return; }
+      const hash = await hashPass(username, fd.get('password'));
+      CACHE.collectors.push({ id: uid(), name: fd.get('name'), username, mobile: fd.get('mobile')||'', status: fd.get('status'), passwordHash: hash });
+      persist(); toast('Collector added','ok');
+    }
+    MODAL=null; render();
+  });
+
+  document.querySelectorAll('[data-action="print-receipt"]').forEach(b=>b.addEventListener('click', ()=>{ window.print(); }));
+  document.querySelectorAll('[data-action="pdf-receipt"]').forEach(b=>b.addEventListener('click', ()=>downloadReceiptPdf(MODAL.data)));
+}
+
+/* ============================= PDF / CSV EXPORT ============================= */
+let JSPDF_READY = null;
+function loadJsPdf(){
+  if(JSPDF_READY) return JSPDF_READY;
+  JSPDF_READY = new Promise((resolve,reject)=>{
+    if(window.jspdf){ resolve(window.jspdf); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = ()=>resolve(window.jspdf);
+    s.onerror = ()=>reject(new Error('Could not load PDF library — an internet connection is needed for this one feature'));
+    document.head.appendChild(s);
+  });
+  return JSPDF_READY;
+}
+async function downloadReceiptPdf(r){
+  try{
+    const { jsPDF } = await loadJsPdf();
+    const doc = new jsPDF({unit:'pt', format:[280,480]});
+    const co = CACHE.company || {};
+    let y = 30;
+    doc.setFont('courier','bold'); doc.setFontSize(12); doc.text(co.companyName||'', 140, y, {align:'center'}); y+=14;
+    doc.setFont('courier','normal'); doc.setFontSize(8); doc.text(co.address||'', 140, y, {align:'center'}); y+=11; doc.text(co.phone||'', 140, y, {align:'center'}); y+=16;
+    doc.setFont('courier','bold'); doc.setFontSize(10); doc.text('PAYMENT RECEIPT', 140, y, {align:'center'}); y+=18;
+    doc.setFont('courier','normal'); doc.setFontSize(9);
+    const line = (k,v)=>{ doc.text(k, 20, y); doc.text(String(v), 260, y, {align:'right'}); y+=15; };
+    line('Receipt No', r.receiptNo); line('Customer ID', r.customerId); line('Customer Name', r.customerName);
+    line('Billing Month', MONTHS[r.month-1]+' '+r.year); line('Monthly Bill', fmtBDT(r.billAmount)); line('Previous Due', fmtBDT(Math.max(r.previousDue,0))); line('Paid', fmtBDT(r.amount));
+    doc.setFont('courier','bold'); line('Remaining Due', r.remainingDue>0?fmtBDT(r.remainingDue):'৳0'); doc.setFont('courier','normal');
+    line('Payment Method', r.method); line('Collected By', r.collectorName); line('Date', fmtDate(r.date));
+    doc.save(r.receiptNo+'.pdf');
+  }catch(err){ toast(err.message || 'Could not generate PDF', 'err'); }
+}
+async function downloadReportPdf(){
+  try{
+    const { jsPDF } = await loadJsPdf();
+    const co = CACHE.company || {}; const y = SELECTED_YEAR, m = SELECTED_MONTH;
+    const active = activeCustomersAsOf(y,m);
+    const totalBill = active.reduce((s,c)=>s+Number(c.monthlyBill||0),0);
+    const monthPays = paymentsInMonth(y,m);
+    const collected = monthPays.reduce((s,p)=>s+Number(p.amount||0),0);
+    const due = active.reduce((s,c)=>s + Math.max(ledgerDue(c,y,m),0), 0);
+    const doc = new jsPDF({unit:'pt', format:'a4'});
+    let yy = 50;
+    doc.setFontSize(16); doc.text(co.companyName||'ISP Billing', 40, yy); yy+=22;
+    doc.setFontSize(12); doc.text('Report — '+MONTHS[m-1]+' '+y, 40, yy); yy+=26;
+    doc.setFontSize(11);
+    [['Total bills', fmtBDT(totalBill)],['Total collection', fmtBDT(collected)],['Total due', fmtBDT(due)],
+     ['Customers paid', String(active.filter(c=>monthPays.some(p=>p.customerId===c.id)).length)],
+     ['Customers due', String(active.length - active.filter(c=>monthPays.some(p=>p.customerId===c.id)).length)]]
+     .forEach(([k,v])=>{ doc.text(k+': '+v, 40, yy); yy+=18; });
+    doc.save('report-'+MONTHS[m-1]+'-'+y+'.pdf');
+  }catch(err){ toast(err.message || 'Could not generate PDF', 'err'); }
+}
+function downloadReportCsv(){
+  const y = SELECTED_YEAR, m = SELECTED_MONTH;
+  const rows = [['Date','Customer','Amount','Method','Collected By','Receipt']];
+  paymentsInMonth(y,m).forEach(p=>rows.push([fmtDate(p.date), p.customerName, p.amount, p.method, p.collectorName, p.receiptNo]));
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'payments-'+MONTHS[m-1]+'-'+y+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+</script>
+</body>
+</html> 
